@@ -2,11 +2,9 @@
 # encoding:utf-8
 # file: practice17.py
 # date: 2020-03-08
-# author: Jason(p25034)
+# author: Jason
 
 # 终端俄罗斯方块Tetris
-
-# TODO 代码见项目 py_tetris 开发完成后同步到此文件
 
 import time
 
@@ -46,8 +44,7 @@ BLOCK_DICT = {
 GAME_BITMAP = [[0 for y in range(GAME_AREA_H)] for x in range(GAME_AREA_L)]
 
 # 单方块临时存储位图
-BLOCK_BITMAP = [[0, 0, [0, 0], 0] if i == 2 else [0, 0, 0, 0]
-                for i in range(4)]
+BLOCK_BITMAP = [[0, 0, [0, 0], 0] if i == 2 else [0, 0, 0, 0] for i in range(4)]
 
 # #################
 # 函数定义
@@ -226,5 +223,5 @@ if __name__ == '__main__':
         time.sleep(0.1)
 
     print()
-    print('DONEEEEEEEEEEExxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'cccccccccccc', 'saaaaaaaxxxxxxxxxxxxx')
+    print('DONEEEEEEEEEE')
     restore_cursor()
