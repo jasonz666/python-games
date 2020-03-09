@@ -145,9 +145,9 @@ def draw_background():
 
 
 def restore_cursor():
-    """恢复隐藏的光标
+    """清屏并恢复隐藏的光标
     """
-    print('\033[?25h')
+    print('\033[2J\033[?25h')
 
 
 def tetris_init():
@@ -224,4 +224,5 @@ if __name__ == '__main__':
 
     print()
     print('DONEEEEEEEEEE')
+    time.sleep(10)
     restore_cursor()
