@@ -1,0 +1,25 @@
+# TODO 俄罗斯方块未完成。。。。。。。。。。
+# TODO 函数测试
+# tetris_init       OK
+# goto_blockxy      OK
+# clear_blockline   OK
+# clear_area        OK
+# edge_block        OK
+# draw_edge         OK
+# pick_block        OK
+# print_block       OK
+# draw_background   OK
+# restore_cursor    OK
+# rotate_block      OK
+# move_block        OK
+# spawn_block       OK
+# clear_prev_block
+# clear_map_area
+# fill_map_area
+
+
+
+
+# TODO 未完成函数。。。。
+# get_keypress
+#
