@@ -326,6 +326,9 @@ if __name__ == '__main__':
     for i in 'IJLOTZS':
         spawn_block()
         print_block(BLOCK_COORD['x'], BLOCK_COORD['y'])
+        time.sleep(1)
+        goto_blockxy(2, 2); print(GAME_BITMAP)  # 检查地图数据与打印对应性
+        time.sleep(5)
         for j in range(5):
             move_block(BLOCK_COORD['x'], BLOCK_COORD['y'], 'r')
             BLOCK_COORD['x'] += 1
