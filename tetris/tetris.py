@@ -12,6 +12,10 @@
 
 import time
 import random
+import sys
+import select
+import copy
+import termios
 
 
 # #################
@@ -29,8 +33,6 @@ GAME_AREA_X, GAME_AREA_Y = 2, 2
 GAME_EDGE, GAME_SQUARE, GAME_CLEAR = '##', 'xx', '  '
 # 游戏区域背景色
 GAME_BKGCOLOR = '\033[40;30m'
-# 清除方块的长与度
-CLEAR_BLOCK_L, CLEAR_BLOCK_H = 4, 4
 # 7方块初始状态位图 2,2位置为方块实际长与高 3,3位置为此方块颜色
 BLOCK_DICT = {
     # 天蓝色
@@ -79,6 +81,15 @@ BLOCK_BITMAP = [[0, 0, [0, 0], 0] if i == 2 else [0, 0, 0, 0] for i in range(4)]
 BLOCK_SX, BLOCK_SY = GAME_AREA_X + GAME_AREA_L // 2 - 2, GAME_AREA_Y
 # 方块左上角地图坐标
 BLOCK_COORD = {'x': BLOCK_SX, 'y': BLOCK_SY}
+# 生成方块计数 得分 方块类型
+BLOCK_COUNT, GAME_SCORE, BLOCK_TYPE = 0, 0, '_'
+# 按键变量 按键检测间隔 方块打印间隔
+KEY_DEFAULT = '_'
+KEY, KEY_INTERVAL, PNT_INTERVAL = KEY_DEFAULT, 0.01, 0.2
+# 计分板左上角坐标
+INFO_AREA_X, INFO_AREA_Y = GAME_AREA_X + GAME_AREA_L + 2, GAME_AREA_Y + 1
+# 计分板区域长与高
+INFO_AREA_L, INFO_AREA_H = 8, GAME_AREA_H
 
 
 # #################
@@ -105,6 +116,12 @@ def goto_blockxy(x=1, y=1):
     print('\033[{};{}H'.format(y, _x), end='', sep='')
 
 
+def _gotoxy_print(x=1, y=1, *args, **kwargs):
+    """打印调试信息"""
+    goto_blockxy(x, y)
+    print(*args, **kwargs)
+
+
 def _edge_block(x=1, y=1, ln=1, h=1, b=GAME_EDGE):
     """
     绘制边框小方块
@@ -120,14 +137,19 @@ def _edge_block(x=1, y=1, ln=1, h=1, b=GAME_EDGE):
         print('{}'.format(b * ln))
 
 
-def draw_edge(x=1, y=1, ln=GAME_AREA_L, h=GAME_AREA_H):
+def draw_edge(x=1, y=1):
     """
     绘制游戏边框
     """
-    _edge_block(x, y, ln + 2, 1)
+    ln1 = GAME_AREA_L + INFO_AREA_L + 3
+    ln2 = GAME_AREA_L + 1
+    ln3 = GAME_AREA_L + INFO_AREA_L + 2
+    h = GAME_AREA_H
+    _edge_block(x, y, ln1, 1)
     _edge_block(x, y + 1, 1, h)
-    _edge_block(x + ln + 1, y + 1, 1, h)
-    _edge_block(x, y + h + 1, ln + 2, 1)
+    _edge_block(x + ln2, y + 1, 1, h)
+    _edge_block(x + ln3, y + 1, 1, h)
+    _edge_block(x, y + h + 1, ln1, 1)
 
 
 # 地图处理函数
@@ -267,9 +289,30 @@ def print_block(x, y):
                 print('{}{}\033[0m'.format(b_color, GAME_SQUARE))
 
 
-def rotate_block():
+def _copy_block(rotated_block, origin_block):
+    """
+    方块拷贝函数
+    :param rotated_block: 旋转后的方块位图
+    :param origin_block: 原始方块位图 必须是4x4方块
+    :return: None
+    """
+    b_length, b_height = origin_block[-2][-2][0], origin_block[-2][-2][1]
+    for _x in range(4):
+        for _y in range(4):
+            if _x < b_length and _y < b_height:
+                origin_block[_x][_y] = rotated_block[_x][_y]
+            elif _x == _y and _x == 2:
+                origin_block[_x][_y] = origin_block[_x][_y][::-1]
+            elif _x == _y and _x == 3:
+                continue
+            else:
+                origin_block[_x][_y] = 0
+
+
+def _rotate_block(flag=True):
     """
     逆时针旋转方块 即求NxM到MxN的转置矩阵
+    :param flag: True生成旋转后的方块 False只旋转不生成旋转后方块
     :return: None
     """
     b_length, b_height = BLOCK_BITMAP[-2][-2][0], BLOCK_BITMAP[-2][-2][1]
@@ -280,27 +323,27 @@ def rotate_block():
             # 逆时针旋转90度
             offset = len(BLOCK_BITMAP[_x]) - b_length
             b_target[_y][_x] = BLOCK_BITMAP[_x][-_y - 1 - offset]
-    # 生成旋转后方块
-    for _x in range(4):
-        for _y in range(4):
-            if _x < b_length and _y < b_height:
-                BLOCK_BITMAP[_x][_y] = b_target[_x][_y]
-            elif _x == _y and _x == 2:
-                BLOCK_BITMAP[_x][_y] = BLOCK_BITMAP[_x][_y][::-1]
-            elif _x == _y and _x == 3:
-                continue
-            else:
-                BLOCK_BITMAP[_x][_y] = 0
+    # flag为真 生成旋转后方块
+    if flag:
+        _copy_block(b_target, BLOCK_BITMAP)
+    # 生成临时旋转后方块用于检测
+    else:
+        # 拷贝未旋转的方块
+        tmp_bitmap = copy.deepcopy(BLOCK_BITMAP)
+        # 生成为临时方块
+        _copy_block(b_target, tmp_bitmap)
+        return tmp_bitmap
 
 
-def _edge_detect(x, y):
+def _edge_detect(x, y, b_bitmap):
     """
     方块是否超出游戏地图检测
     :param x: 方块左上角坐标x
     :param y: 方块左上角坐标y
+    :param b_bitmap: 方块位图
     :return: 布尔型
     """
-    b_l, b_h = BLOCK_BITMAP[-2][-2][0], BLOCK_BITMAP[-2][-2][1]
+    b_l, b_h = b_bitmap[-2][-2][0], b_bitmap[-2][-2][1]
     if x < GAME_AREA_X or y < GAME_AREA_Y or \
             x + b_l - 1 >= GAME_AREA_X + GAME_AREA_L or \
             y + b_h - 1 >= GAME_AREA_Y + GAME_AREA_H:
@@ -324,57 +367,210 @@ def _clear_block(x, y, ln, h):
                 goto_blockxy(_x, _y)
                 # 因为标准输出缓冲区的原因 不要传参end='' 否则打印内容可能不会立刻显示
                 print('{}{}\033[0m'.format(GAME_BKGCOLOR, GAME_CLEAR))
+                # 清除地图点
+                _clear_map_area(_x, _y, 1, 1)
 
 
 def move_block(x, y, direction, distance=1):
     """
-    移动方块
+    移动方块或旋转方块
     :param x: 当前位置x
     :param y: 当前位置y
-    :param direction: 移动方向 'l'向左 'r'向右 'd'向下
+    :param direction: 移动方向 'to_l'向左 'to_r'向右 'to_d'向下 'to_u'原地旋转
     :param distance: 移动距离
     :return: None
     """
+    global KEY
     b_l, b_h = BLOCK_BITMAP[-2][-2][0], BLOCK_BITMAP[-2][-2][1]
-    if direction == 'l' and _edge_detect(x - distance, y):
+    if direction == 'to_l' and _edge_detect(x - distance, y, BLOCK_BITMAP) and \
+            _collision_detect(x - distance, y, 'to_l'):
         _clear_block(x, y, b_l, b_h)
         print_block(x - distance, y)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x - distance, y
-    elif direction == 'r' and _edge_detect(x + distance, y):
+    elif direction == 'to_r' and _edge_detect(x + distance, y, BLOCK_BITMAP) and \
+            _collision_detect(x + distance, y, 'to_r'):
         _clear_block(x, y, b_l, b_h)
         print_block(x + distance, y)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x + distance, y
-    elif direction == 'd' and _edge_detect(x, y + distance):
+    elif direction == 'to_d' and _edge_detect(x, y + distance, BLOCK_BITMAP) and \
+            _collision_detect(x, y + distance, 'to_d'):
         _clear_block(x, y, b_l, b_h)
         print_block(x, y + distance)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x, y + distance
+    # TODO 需要 _edge_detect 检测旋转
+    elif direction == 'to_u' and _edge_detect(x, y, _rotate_block(False)):
+        _clear_block(x, y, b_l, b_h)
+        _rotate_block()
+        print_block(x, y)
+    # 恢复向下移动 区别于get_keys获取的's'
+    KEY = KEY_DEFAULT
 
 
 def spawn_newblock():
     """新方块生成
     """
+    global BLOCK_COUNT, BLOCK_TYPE
     # 方块挑选
     b_type = 'IJLOSTZ'
-    _pick_block(random.choice(b_type))
+    BLOCK_TYPE = random.choice(b_type)
+    _pick_block(BLOCK_TYPE)
     # 新方块出生点初始化
     BLOCK_COORD['x'], BLOCK_COORD['y'] = BLOCK_SX, BLOCK_SY
+    BLOCK_COUNT += 1
 
 
-# 后台计算
-# 负责计算图形的消除 计分等
-# 图形
-# 交互函数
-# 负责处理键盘输入
+# 按键处理函数
+# 包括获取按键 按键转换方向等
+
+
+def get_keys():
+    """
+    按键获取函数 p键退出 不支持方向键
+    :return: None
+    """
+    global KEY
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    new = termios.tcgetattr(fd)
+    # 关闭回显和回车
+    new[3] = new[3] & ~termios.ECHO & ~termios.ICANON
+    # 在一个方块打印间隔时间内检测times次按键输入
+    # get_keys函数充当sleep函数等待PNT_INTERVAL秒的过程中获取按键
+    count, times = 0, PNT_INTERVAL // KEY_INTERVAL
+    try:
+        termios.tcsetattr(fd, termios.TCSADRAIN, new)
+        while count < times:
+            time.sleep(KEY_INTERVAL)
+            # support non-blocking input
+            if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
+                KEY = sys.stdin.read(1)
+                if KEY in 'wad':  # 2倍加速移动或旋转
+                    times //= 2
+                if KEY == 's':  # 4倍加速下降
+                    times //= 4
+                if KEY == 'p':
+                    break
+            count += 1
+    except KeyboardInterrupt:
+        print('get: ctrl-c')
+        exit()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def get_direction():
+    """
+    按键转换为方向 'to_l'向左 'to_r'向右 'to_d'向下 'to_u'原地旋转
+    :return: 方向
+    """
+    if KEY == 'a':
+        return 'to_l'
+    elif KEY == 'd':
+        return 'to_r'
+    elif KEY == 's':
+        return 'to_d'
+    elif KEY == 'w':
+        return 'to_u'
+    elif KEY == KEY_DEFAULT:
+        return 'to_d'
+
+
+# 碰撞检测与计分函数
+# 包括方块向下运动碰撞检测 地图中方块的消除 消除后计分等
+
+
+def _collision_detect(x, y, direction):
+    """
+    方块与方块之间碰撞检测
+    :param x: 方块左上角坐标x
+    :param y: 方块左上角坐标y
+    :param direction: 移动方向 'to_l'向左 'to_r'向右 'to_d'向下
+    :return: 布尔型
+    """
+    b_l, b_h = BLOCK_BITMAP[-2][-2][0], BLOCK_BITMAP[-2][-2][1]
+    distance = 1000000
+    if direction == 'to_l':
+        # 从方块左上角的点向下竖直扫描
+        for _y in range(y, y + b_h):
+            block_y = _y - y
+            # 从方块左上角的点开始向左水平扫描 直到遇到地图点 计算左上角点到地图点的距离
+            for map_x in range(x - GAME_AREA_X, -1, -1):
+                map_y = _y - GAME_AREA_Y
+                # 从方块左上角的点向右扫描方块 直到第一个值为1的点
+                for block_x in range(b_l):  # 0->b_l-1
+                    if GAME_BITMAP[map_y][map_x][0] == 1 and BLOCK_BITMAP[block_y][block_x] == 1:
+                        if abs(x - GAME_AREA_X - map_x) < distance:
+                            _gotoxy_print(28, 30, 'in TO_L abs..')
+                            distance = abs(x - GAME_AREA_X - map_x)
+                            break
+    elif direction == 'to_r':
+        for _y in range(y, y + b_h):
+            _gotoxy_print(28, 28, 'in TO_R for1')
+            block_y = _y - y
+            for map_x in range(x - GAME_AREA_X + b_l - 1, len(GAME_BITMAP[0])):
+                _gotoxy_print(28, 29, 'in TO_R for2')
+                map_y = _y - GAME_AREA_Y
+                for block_x in range(b_l - 1, -1, -1):
+                    if GAME_BITMAP[map_y][map_x][0] == 1 and BLOCK_BITMAP[block_y][block_x] == 1:
+                        if abs(map_x - (x - GAME_AREA_X + b_l - 1)) < distance:
+                            _gotoxy_print(28, 30, 'in TO_R abs..')
+                            distance = abs(map_x - (x - GAME_AREA_X + b_l - 1))
+                            break
+    # TODO 下边缘扫描有问题。。。。。。。。。。。
+    elif direction == 'to_d':
+        for _x in range(x, x + b_l):
+            block_x = _x - x
+            for map_y in range(y - GAME_AREA_Y + b_h - 1, len(GAME_BITMAP)):
+                map_x = _x - GAME_AREA_X
+                for block_y in range(b_h - 1, -1, -1):
+                    if GAME_BITMAP[map_y][map_x][0] == 1 and BLOCK_BITMAP[block_y][block_x] == 1:
+                        if abs(map_y - (y - GAME_AREA_Y + b_h - 1)) < distance:
+                            _gotoxy_print(28, 30, 'in TO_D abs..')
+                            _gotoxy_print(28, 31, 'in TO_D d={:>0{}}'.format(distance, 7))
+                            distance = abs(map_y - (y - GAME_AREA_Y + b_h - 1))
+                            break
+    # 距离为0 则为假 表示点有重叠 不能移动
+    return distance
+
+
+def _collision_detect_r(x, y, direction='to_u'):
+    """
+    旋转后碰撞检测
+    :param x: 方块左上角坐标x
+    :param y: 方块左上角坐标y
+    :param direction: 'to_u'原地旋转
+    :return: 布尔型
+    """
+    pass
+
+
+def print_info():
+    x, y = INFO_AREA_X, INFO_AREA_Y
+    str_len = INFO_AREA_L - GAME_AREA_X + 1
+    goto_blockxy(x, y)
+    # '按键：'占3个小方块宽度 2个英文字符占一个小方块宽度
+    print('按键：{:<{}}'.format(str(KEY), (str_len - 3) * 2))
+    goto_blockxy(x, y + 2)
+    print('方块数：{:<{}}'.format(str(BLOCK_COUNT), (str_len - 4) * 2))
+    goto_blockxy(x, y + 4)
+    print('方块：{:<{}}'.format(str(BLOCK_TYPE), (str_len - 3) * 2))
+    goto_blockxy(x, y + 6)
+    print('得分：{:<{}}'.format(str(GAME_SCORE), (str_len - 3) * 2))
+
+
 if __name__ == '__main__':
     tetris_init()
-
+    # ############ 按键p  退出。。。。。。。。。。
     for i in 'IJLOTZSX':
         spawn_newblock()
         print_block(BLOCK_COORD['x'], BLOCK_COORD['y'])
-        time.sleep(0.1)
-        for j in range(24):
-            move_block(BLOCK_COORD['x'], BLOCK_COORD['y'], 'd')
-            time.sleep(0.09)
+        for j in range(40):
+            get_keys()
+            print_info()
+            goto_blockxy(INFO_AREA_X, INFO_AREA_Y)
+            move_block(BLOCK_COORD['x'], BLOCK_COORD['y'], get_direction())
+            # time.sleep(0.09)
+            # ############# 直到无法下降 生成新方块
 
     time.sleep(1)
     print('\n')

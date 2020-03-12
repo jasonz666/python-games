@@ -1,5 +1,3 @@
-# TODO 俄罗斯方块未完成。。。。。。。。。。
-# TODO 函数测试
 goto_blockxy        OK
 _edge_block         OK
 draw_edge           OK
@@ -13,17 +11,16 @@ restore_cursor      OK
 tetris_init         OK
 _pick_block         OK
 print_block         OK
-rotate_block        OK
+_rotate_block        OK
 move_block          OK
 spawn_newblock      OK
 _edge_detect        OK
 _clear_block        OK
+get_keys            OK
+get_direction       OK
+print_info          OK
+_copy_block         OK
+_collision_detect
+_collision_detect_r
+_gotoxy_print
 
-
-
-
-
-
-# TODO 未完成函数。。。。
-# get_keypress
-#
