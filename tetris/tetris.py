@@ -228,6 +228,22 @@ def print_map_area(x, y, ln=GAME_AREA_L, h=GAME_AREA_H):
                 print('{}{}\033[0m'.format(GAME_BITMAP[_x][_y][1], GAME_SQUARE))
 
 
+def _print_map_bits():
+    """
+    打印地图点 用于调试
+    :return: None
+    """
+    a, b = GAME_AREA_X + GAME_AREA_L + INFO_AREA_L + 3, GAME_AREA_Y
+    for x in range(len(GAME_BITMAP)):
+        goto_blockxy(a, b)
+        for y in range(len(GAME_BITMAP[0])):
+            if GAME_BITMAP[x][y][0] == 1:
+                print('\033[31m{}\033[0m,'.format(GAME_BITMAP[x][y][0]), end='')
+            else:
+                print('{},'.format(GAME_BITMAP[x][y][0]), end='')
+        b += 1
+
+
 def draw_background():
     """游戏区域背景色填充
     """
@@ -383,17 +399,17 @@ def move_block(x, y, direction, distance=1):
     global KEY
     b_l, b_h = BLOCK_BITMAP[-2][-2][0], BLOCK_BITMAP[-2][-2][1]
     if direction == 'to_l' and _edge_detect(x - distance, y, BLOCK_BITMAP) and \
-            _collision_detect(x - distance, y, 'to_l'):
+            _collision_detect(x - distance, y, 'to_l', distance):
         _clear_block(x, y, b_l, b_h)
         print_block(x - distance, y)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x - distance, y
     elif direction == 'to_r' and _edge_detect(x + distance, y, BLOCK_BITMAP) and \
-            _collision_detect(x + distance, y, 'to_r'):
+            _collision_detect(x + distance, y, 'to_r', distance):
         _clear_block(x, y, b_l, b_h)
         print_block(x + distance, y)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x + distance, y
     elif direction == 'to_d' and _edge_detect(x, y + distance, BLOCK_BITMAP) and \
-            _collision_detect(x, y + distance, 'to_d'):
+            _collision_detect(x, y + distance, 'to_d', distance):
         _clear_block(x, y, b_l, b_h)
         print_block(x, y + distance)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x, y + distance
@@ -479,57 +495,19 @@ def get_direction():
 # 包括方块向下运动碰撞检测 地图中方块的消除 消除后计分等
 
 
-def _collision_detect(x, y, direction):
+def _collision_detect(x, y, direction, dist):
     """
     方块与方块之间碰撞检测
     :param x: 方块左上角坐标x
     :param y: 方块左上角坐标y
     :param direction: 移动方向 'to_l'向左 'to_r'向右 'to_d'向下
+    :param dist: 移动距离
     :return: 布尔型
     """
     b_l, b_h = BLOCK_BITMAP[-2][-2][0], BLOCK_BITMAP[-2][-2][1]
     distance = 1000000
-    if direction == 'to_l':
-        # 从方块左上角的点向下竖直扫描
-        for _y in range(y, y + b_h):
-            block_y = _y - y
-            # 从方块左上角的点开始向左水平扫描 直到遇到地图点 计算左上角点到地图点的距离
-            for map_x in range(x - GAME_AREA_X, -1, -1):
-                map_y = _y - GAME_AREA_Y
-                # 从方块左上角的点向右扫描方块 直到第一个值为1的点
-                for block_x in range(b_l):  # 0->b_l-1
-                    if GAME_BITMAP[map_y][map_x][0] == 1 and BLOCK_BITMAP[block_y][block_x] == 1:
-                        if abs(x - GAME_AREA_X - map_x) < distance:
-                            _gotoxy_print(28, 30, 'in TO_L abs..')
-                            distance = abs(x - GAME_AREA_X - map_x)
-                            break
-    elif direction == 'to_r':
-        for _y in range(y, y + b_h):
-            _gotoxy_print(28, 28, 'in TO_R for1')
-            block_y = _y - y
-            for map_x in range(x - GAME_AREA_X + b_l - 1, len(GAME_BITMAP[0])):
-                _gotoxy_print(28, 29, 'in TO_R for2')
-                map_y = _y - GAME_AREA_Y
-                for block_x in range(b_l - 1, -1, -1):
-                    if GAME_BITMAP[map_y][map_x][0] == 1 and BLOCK_BITMAP[block_y][block_x] == 1:
-                        if abs(map_x - (x - GAME_AREA_X + b_l - 1)) < distance:
-                            _gotoxy_print(28, 30, 'in TO_R abs..')
-                            distance = abs(map_x - (x - GAME_AREA_X + b_l - 1))
-                            break
-    # TODO 下边缘扫描有问题。。。。。。。。。。。
-    elif direction == 'to_d':
-        for _x in range(x, x + b_l):
-            block_x = _x - x
-            for map_y in range(y - GAME_AREA_Y + b_h - 1, len(GAME_BITMAP)):
-                map_x = _x - GAME_AREA_X
-                for block_y in range(b_h - 1, -1, -1):
-                    if GAME_BITMAP[map_y][map_x][0] == 1 and BLOCK_BITMAP[block_y][block_x] == 1:
-                        if abs(map_y - (y - GAME_AREA_Y + b_h - 1)) < distance:
-                            _gotoxy_print(28, 30, 'in TO_D abs..')
-                            _gotoxy_print(28, 31, 'in TO_D d={:>0{}}'.format(distance, 7))
-                            distance = abs(map_y - (y - GAME_AREA_Y + b_h - 1))
-                            break
-    # 距离为0 则为假 表示点有重叠 不能移动
+    # TODO 有问题。。。。重写。。move_block 也要调整
+    pass
     return distance
 
 
@@ -569,6 +547,7 @@ if __name__ == '__main__':
             print_info()
             goto_blockxy(INFO_AREA_X, INFO_AREA_Y)
             move_block(BLOCK_COORD['x'], BLOCK_COORD['y'], get_direction())
+            _print_map_bits()
             # time.sleep(0.09)
             # ############# 直到无法下降 生成新方块
 

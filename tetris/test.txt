@@ -11,8 +11,7 @@ restore_cursor      OK
 tetris_init         OK
 _pick_block         OK
 print_block         OK
-_rotate_block        OK
-move_block          OK
+_rotate_block       OK
 spawn_newblock      OK
 _edge_detect        OK
 _clear_block        OK
@@ -20,7 +19,9 @@ get_keys            OK
 get_direction       OK
 print_info          OK
 _copy_block         OK
+_print_map_bits     OK
+_gotoxy_print       OK
 _collision_detect
 _collision_detect_r
-_gotoxy_print
+move_block
 
