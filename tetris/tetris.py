@@ -399,22 +399,23 @@ def move_block(x, y, direction, distance=1):
     global KEY
     b_l, b_h = BLOCK_BITMAP[-2][-2][0], BLOCK_BITMAP[-2][-2][1]
     if direction == 'to_l' and _edge_detect(x - distance, y, BLOCK_BITMAP) and \
-            _collision_detect(x - distance, y, 'to_l', distance):
+            _collision_detect(x - distance, y, 'to_l', BLOCK_BITMAP):
         _clear_block(x, y, b_l, b_h)
         print_block(x - distance, y)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x - distance, y
     elif direction == 'to_r' and _edge_detect(x + distance, y, BLOCK_BITMAP) and \
-            _collision_detect(x + distance, y, 'to_r', distance):
+            _collision_detect(x + distance, y, 'to_r', BLOCK_BITMAP):
         _clear_block(x, y, b_l, b_h)
         print_block(x + distance, y)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x + distance, y
     elif direction == 'to_d' and _edge_detect(x, y + distance, BLOCK_BITMAP) and \
-            _collision_detect(x, y + distance, 'to_d', distance):
+            _collision_detect(x, y + distance, 'to_d', BLOCK_BITMAP):
         _clear_block(x, y, b_l, b_h)
         print_block(x, y + distance)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x, y + distance
-    # TODO 需要 _edge_detect 检测旋转
-    elif direction == 'to_u' and _edge_detect(x, y, _rotate_block(False)):
+    # TODO 需要 _edge_detect 检测旋转。。。。。
+    elif direction == 'to_u' and _edge_detect(x, y, _rotate_block(False)) and \
+            _collision_detect_r(x, y, _rotate_block(False)):
         _clear_block(x, y, b_l, b_h)
         _rotate_block()
         print_block(x, y)
@@ -422,13 +423,16 @@ def move_block(x, y, direction, distance=1):
     KEY = KEY_DEFAULT
 
 
-def spawn_newblock():
+def spawn_newblock(t=None):
     """新方块生成
     """
     global BLOCK_COUNT, BLOCK_TYPE
     # 方块挑选
     b_type = 'IJLOSTZ'
-    BLOCK_TYPE = random.choice(b_type)
+    if t is None:
+        BLOCK_TYPE = random.choice(b_type)
+    else:
+        BLOCK_TYPE = t
     _pick_block(BLOCK_TYPE)
     # 新方块出生点初始化
     BLOCK_COORD['x'], BLOCK_COORD['y'] = BLOCK_SX, BLOCK_SY
@@ -495,31 +499,82 @@ def get_direction():
 # 包括方块向下运动碰撞检测 地图中方块的消除 消除后计分等
 
 
-def _collision_detect(x, y, direction, dist):
+def _collision_detect(x, y, direction, b_bitmap):
     """
     方块与方块之间碰撞检测
     :param x: 方块左上角坐标x
     :param y: 方块左上角坐标y
     :param direction: 移动方向 'to_l'向左 'to_r'向右 'to_d'向下
-    :param dist: 移动距离
+    :param b_bitmap: 方块位图
     :return: 布尔型
     """
-    b_l, b_h = BLOCK_BITMAP[-2][-2][0], BLOCK_BITMAP[-2][-2][1]
+    b_l, b_h = b_bitmap[-2][-2][0], b_bitmap[-2][-2][1]
     distance = 1000000
-    # TODO 有问题。。。。重写。。move_block 也要调整
-    pass
+    if direction == 'to_l':
+        for _y in range(y, y + b_h):
+            block_y = _y - y
+            map_y = _y - GAME_AREA_Y
+            for block_x in range(b_l):  # 0->b_l-1
+                if b_bitmap[block_y][block_x] == 1:
+                    sx = x - GAME_AREA_X + block_x
+                    for map_x in range(sx, -1, -1):
+                        if GAME_BITMAP[map_y][map_x][0] == 1:
+                            if abs(sx - map_x) < distance:
+                                distance = abs(sx - map_x)
+                                break
+                    break
+    elif direction == 'to_r':
+        for _y in range(y, y + b_h):
+            block_y = _y - y
+            map_y = _y - GAME_AREA_Y
+            for block_x in range(b_l - 1, -1, -1):
+                if b_bitmap[block_y][block_x] == 1:
+                    sx = x - GAME_AREA_X + block_x
+                    for map_x in range(sx, len(GAME_BITMAP[0])):
+                        if GAME_BITMAP[map_y][map_x][0] == 1:
+                            if abs(map_x - sx) < distance:
+                                distance = abs(map_x - sx)
+                                break
+                    break
+    elif direction == 'to_d':
+        for _x in range(x, x + b_l):
+            block_x = _x - x
+            map_x = _x - GAME_AREA_X
+            for block_y in range(b_h - 1, -1, -1):
+                # 从左往右从下往上 寻找方块上第一个值为1的点 纵坐标为block_y
+                if b_bitmap[block_y][block_x] == 1:
+                    # 从block_y映射到地图对应的点的下一个点 此点为方块下次将到达的点 纵坐标起点为sy
+                    sy = y - GAME_AREA_Y + block_y
+                    # 从sy开始竖直向下到地图纵坐标最大值len(GAME_BITMAP) 查找值为1的地图点
+                    for map_y in range(sy, len(GAME_BITMAP)):
+                        if GAME_BITMAP[map_y][map_x][0] == 1:
+                            # 计算地图点map_y到方块下次将到达的点sy之间距离
+                            if abs(map_y - sy) < distance:
+                                distance = abs(map_y - sy)
+                                break
+                    # 只需要查找一次地图上的点
+                    break
+    # 距离为0 则为假 表示点有重叠 不能移动
     return distance
 
 
-def _collision_detect_r(x, y, direction='to_u'):
+def _collision_detect_r(x, y, b_bitmap):
     """
     旋转后碰撞检测
     :param x: 方块左上角坐标x
     :param y: 方块左上角坐标y
-    :param direction: 'to_u'原地旋转
+    :param b_bitmap: 方块位图
     :return: 布尔型
     """
-    pass
+    # TODO 这个函数有问题。。。。。。。
+    # TODO 可能是因为 _collision_detect(x, y, 'to_l', b_bitmap) 传递的 x或y 函数内当做移动后来处理
+    # 比如传入   x, y + distance
+    if _collision_detect(x, y, 'to_l', b_bitmap) and \
+            _collision_detect(x, y, 'to_r', b_bitmap) and \
+            _collision_detect(x, y, 'to_d', b_bitmap):
+        return True
+    else:
+        return True
 
 
 def print_info():
@@ -540,7 +595,7 @@ if __name__ == '__main__':
     tetris_init()
     # ############ 按键p  退出。。。。。。。。。。
     for i in 'IJLOTZSX':
-        spawn_newblock()
+        spawn_newblock('I')
         print_block(BLOCK_COORD['x'], BLOCK_COORD['y'])
         for j in range(40):
             get_keys()
