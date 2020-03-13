@@ -31,8 +31,8 @@ import termios
 GAME_AREA_L, GAME_AREA_H = 16, 24
 # 游戏区域内左上角坐标为坐标原点 X为横坐标 Y为纵坐标
 GAME_AREA_X, GAME_AREA_Y = 2, 2
-# 游戏边框图形 基本方块的小方块渲染图形 清除小方块图形
-GAME_EDGE, GAME_SQUARE, GAME_CLEAR = '##', 'xx', '  '
+# 游戏边框图形 基本方块的小方块渲染图形
+GAME_EDGE, GAME_SQUARE = '##', '  '
 # 游戏区域背景色
 GAME_BKGCOLOR = '\033[40;30m'
 # 游戏区域位图 即游戏地图
@@ -202,7 +202,7 @@ def _fill_map_point(x, y, color):
     GAME_BITMAP[map_y][map_x] = [1, color]
 
 
-def _clear_blockline(lenght=1, block=GAME_CLEAR, bkg=GAME_BKGCOLOR):
+def _clear_blockline(lenght=1, block=GAME_SQUARE, bkg=GAME_BKGCOLOR):
     """
     填充指定长度方块为背景色 即清除方块
     :param lenght: 方块长度 每个小方块占2英文字符宽度
@@ -216,8 +216,7 @@ def _clear_blockline(lenght=1, block=GAME_CLEAR, bkg=GAME_BKGCOLOR):
 
 def clear_area(x=GAME_AREA_X, y=GAME_AREA_Y, ln=GAME_AREA_L, h=GAME_AREA_H):
     """
-    清除指定矩形区域 清除的最小单位是小方块 即2个英文字符
-    假定游戏区域为黑色背景
+    清除指定矩形区域 清除的最小单位是小方块 即2个英文字符 游戏区域为黑色背景
     :param x: 起始x坐标
     :param y: 起始y坐标
     :param ln: 区域长度
@@ -232,7 +231,7 @@ def clear_area(x=GAME_AREA_X, y=GAME_AREA_Y, ln=GAME_AREA_L, h=GAME_AREA_H):
 
 def print_map_area(x, y, ln=GAME_AREA_L, h=GAME_AREA_H):
     """
-    根据地图位图打印内容
+    根据地图位图刷新游戏区域
     :param x: 地图起点坐标x
     :param y: 地图起点坐标y
     :param ln: 区域长
@@ -242,9 +241,8 @@ def print_map_area(x, y, ln=GAME_AREA_L, h=GAME_AREA_H):
     map_x, map_y = x - GAME_AREA_X, y - GAME_AREA_Y
     for _x in range(map_y, map_y + h):
         for _y in range(map_x, map_x + ln):
-            if GAME_BITMAP[_x][_y][0] == 1:
-                goto_blockxy(_y + GAME_AREA_Y, _x + GAME_AREA_X)
-                print('{}{}\033[0m'.format(GAME_BITMAP[_x][_y][1], GAME_SQUARE))
+            goto_blockxy(_y + GAME_AREA_Y, _x + GAME_AREA_X)
+            print('{}{}\033[0m'.format(GAME_BITMAP[_x][_y][1], GAME_SQUARE))
 
 
 def _print_map_bits():
@@ -405,7 +403,7 @@ def _clear_block(x, y, ln, h):
             if BLOCK_BITMAP[_y - y][_x - x] == 1:
                 goto_blockxy(_x, _y)
                 # 因为标准输出缓冲区的原因 不要传参end='' 否则打印内容可能不会立刻显示
-                print('{}{}\033[0m'.format(GAME_BKGCOLOR, GAME_CLEAR))
+                print('{}{}\033[0m'.format(GAME_BKGCOLOR, GAME_SQUARE))
                 # 清除地图点
                 _clear_map_area(_x, _y, 1, 1)
 
@@ -628,14 +626,66 @@ def print_info():
     print('暂停/开始')
 
 
-def eliminate_blocks():
-    # TODO 消除函数 未完成
-    # TODO 计分功能 未完成
-    pass
+def _is_eliminable(x):
+    """
+    判断地图位图的某行能否消除
+    :param x: 地图位图索引x
+    :return: 布尔型
+    """
+    v_count = 0
+    for v in GAME_BITMAP[x]:
+        if v[0] == 1:
+            v_count += 1
+    return v_count == len(GAME_BITMAP[x])
+
+
+def _is_emptyline(x):
+    """
+    判断地图中某行是不是空行
+    :param x: 地图位图索引x
+    :return: 布尔型
+    """
+    v_count = 0
+    for v in GAME_BITMAP[x]:
+        if v[0] == 0:
+            v_count += 1
+    return v_count == len(GAME_BITMAP[x])
+
+
+def _do_eliminate(x):
+    """
+    消除地图中的某行
+    :param x: 能消除行的索引x
+    :return: None
+    """
+    global GAME_SCORE
+    GAME_SCORE += 1
+    # 向下逐行覆盖消除的行
+    for _x in range(x - 1, -1, -1):
+        GAME_BITMAP[_x + 1] = copy.deepcopy(GAME_BITMAP[_x])
+        if _is_emptyline(_x):
+            break
+
+
+def eliminate_blocks(x=len(GAME_BITMAP) - 1):
+    """
+    消除方块函数
+    :param x: 地图位图的某一行 即索引x
+    :return: None
+    """
+    # 从下到上扫描能消除的行 逐行消除 使用递归
+    if x < 0 or _is_emptyline(x):
+        return
+    if _is_eliminable(x):
+        _do_eliminate(x)
+        eliminate_blocks(x)
+    else:
+        eliminate_blocks(x - 1)
 
 
 if __name__ == '__main__':
     tetris_init()
+    tmp_score = GAME_SCORE
     while True:
         # 生成新方块
         spawn_newblock()
@@ -657,7 +707,15 @@ if __name__ == '__main__':
             if down_move_count == 0 and reborn_flag:
                 restore_cursor()
                 exit_clear('Gam Over!!!', 0)
+            # 退出循环 生成新方块
             if reborn_flag:
+                # 消除
+                eliminate_blocks()
+                # 有方块消除时 才全地图刷新
+                if GAME_SCORE > tmp_score:
+                    # _gotoxy_print(28,29, 'in printmaparea')
+                    print_map_area(GAME_AREA_X, GAME_AREA_Y)
+                    tmp_score = GAME_SCORE
                 break
             # _print_map_bits()
             down_move_count += 1

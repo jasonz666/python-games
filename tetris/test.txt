@@ -24,8 +24,9 @@ _gotoxy_print       OK
 _collision_detect   OK
 _collision_detect_r OK
 move_block          OK
-eliminate_blocks
-exit_clear
-
-
+exit_clear          OK
+eliminate_blocks    OK
+_is_eliminable      OK
+_do_eliminate       OK
+_is_emptyline       OK
 
