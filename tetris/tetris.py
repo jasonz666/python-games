@@ -92,7 +92,7 @@ BLOCK_COUNT, GAME_SCORE, BLOCK_TYPE = 0, 0, '_'
 # 按键和信息相关变量
 
 # 按键变量 按键检测间隔 方块打印间隔
-KEY_DEFAULT = '_'
+KEY_DEFAULT, KEY_PAUSE = '_', ' '
 KEY, KEY_INTERVAL, PNT_INTERVAL = KEY_DEFAULT, 0.01, 0.2
 # 计分板左上角坐标
 INFO_AREA_X, INFO_AREA_Y = GAME_AREA_X + GAME_AREA_L + 2, GAME_AREA_Y + 1
@@ -107,6 +107,17 @@ INFO_AREA_L, INFO_AREA_H = 8, GAME_AREA_H
 
 # 初始化与通用函数
 # 包括坐标定位 绘制地图边框 填充地图背景色等函数
+
+
+def exit_clear(txt, e_code=0):
+    """
+    退出时做一些清理工作
+    :param txt: 文本
+    :param e_code: 退出码
+    :return:
+    """
+    print(txt)
+    exit(e_code)
 
 
 def goto_blockxy(x=1, y=1):
@@ -484,12 +495,12 @@ def get_keys():
                     times //= 2
                 if KEY == 's':  # 4倍加速下降
                     times //= 4
-                if KEY == 'p':
+                # 暂停
+                if KEY == KEY_PAUSE:
                     break
             count += 1
     except KeyboardInterrupt:
-        print('Get: Ctrl-C to EXIT')
-        exit()
+        exit_clear('Get: Ctrl-C to EXIT', 1)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
@@ -609,7 +620,9 @@ def print_info():
     goto_blockxy(x, y + 6)
     print('得分：{:<{}}'.format(str(GAME_SCORE), (str_len - 3) * 2))
     goto_blockxy(x, y + 9)
-    print('按p暂停/开始')
+    print('按 {}'.format('空格' if KEY_PAUSE == ' ' else KEY_PAUSE))
+    goto_blockxy(x, y + 10)
+    print('暂停/开始')
 
 
 def eliminate_blocks():
@@ -628,18 +641,20 @@ if __name__ == '__main__':
         while True:
             get_keys()
             # 暂停
-            if KEY == 'p':
+            if KEY == KEY_PAUSE:
                 KEY = KEY_DEFAULT
-                while KEY != 'p':
-                    get_keys()
-                    time.sleep(0.1)
+                while KEY != ' ':
+                    try:
+                        get_keys()
+                        time.sleep(0.2)
+                    except KeyboardInterrupt:
+                        exit_clear('Get: Ctrl-C to EXIT', 1)
             # 打印信息
             print_info()
             reborn_flag = move_block(BLOCK_COORD['x'], BLOCK_COORD['y'], get_direction())
             if down_move_count == 0 and reborn_flag:
                 restore_cursor()
-                print('Gam Over!!!')
-                exit()
+                exit_clear('Gam Over!!!', 0)
             if reborn_flag:
                 break
             # _print_map_bits()

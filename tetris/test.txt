@@ -25,7 +25,7 @@ _collision_detect   OK
 _collision_detect_r OK
 move_block          OK
 eliminate_blocks
-
+exit_clear
 
 
 
