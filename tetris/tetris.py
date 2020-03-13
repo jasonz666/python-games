@@ -23,6 +23,8 @@ import termios
 # #################
 
 
+# 地图相关变量
+
 # 下面的方块指7种基本方块 小方块指构成基本方块的最小单位
 # 终端使用等宽字体时 小方块正好是个小正方形 1个小方块由2个英文字符组成
 # 游戏区域即游戏地图的长与高
@@ -33,6 +35,11 @@ GAME_AREA_X, GAME_AREA_Y = 2, 2
 GAME_EDGE, GAME_SQUARE, GAME_CLEAR = '##', 'xx', '  '
 # 游戏区域背景色
 GAME_BKGCOLOR = '\033[40;30m'
+# 游戏区域位图 即游戏地图
+GAME_BITMAP = [[[0, GAME_BKGCOLOR] for y in range(GAME_AREA_L)] for x in range(GAME_AREA_H)]
+
+# 方块相关变量
+
 # 7方块初始状态位图 2,2位置为方块实际长与高 3,3位置为此方块颜色
 BLOCK_DICT = {
     # 天蓝色
@@ -73,8 +80,6 @@ BLOCK_DICT = {
           [0, 0, [3, 2], 0],
           [0, 0, 0, '\033[41;31m']]
 }
-# 游戏区域位图
-GAME_BITMAP = [[[0, GAME_BKGCOLOR] for y in range(GAME_AREA_L)] for x in range(GAME_AREA_H)]
 # 方块临时存储位图
 BLOCK_BITMAP = [[0, 0, [0, 0], 0] if i == 2 else [0, 0, 0, 0] for i in range(4)]
 # 定义方块出生点的方块左上角的地图坐标
@@ -83,6 +88,9 @@ BLOCK_SX, BLOCK_SY = GAME_AREA_X + GAME_AREA_L // 2 - 2, GAME_AREA_Y
 BLOCK_COORD = {'x': BLOCK_SX, 'y': BLOCK_SY}
 # 生成方块计数 得分 方块类型
 BLOCK_COUNT, GAME_SCORE, BLOCK_TYPE = 0, 0, '_'
+
+# 按键和信息相关变量
+
 # 按键变量 按键检测间隔 方块打印间隔
 KEY_DEFAULT = '_'
 KEY, KEY_INTERVAL, PNT_INTERVAL = KEY_DEFAULT, 0.01, 0.2
@@ -316,10 +324,14 @@ def _copy_block(rotated_block, origin_block):
     for _x in range(4):
         for _y in range(4):
             if _x < b_length and _y < b_height:
+                # 原始方块长x高 => 位图[高][长] => 旋转后方块的 位图[长][高]
+                # 所以这里_x是b_length _y是b_height
                 origin_block[_x][_y] = rotated_block[_x][_y]
             elif _x == _y and _x == 2:
+                # 长x高变换
                 origin_block[_x][_y] = origin_block[_x][_y][::-1]
             elif _x == _y and _x == 3:
+                # 颜色值不改变
                 continue
             else:
                 origin_block[_x][_y] = 0
@@ -344,7 +356,7 @@ def _rotate_block(flag=True):
         _copy_block(b_target, BLOCK_BITMAP)
     # 生成临时旋转后方块用于检测
     else:
-        # 拷贝未旋转的方块
+        # 拷贝未旋转的方块为模板
         tmp_bitmap = copy.deepcopy(BLOCK_BITMAP)
         # 生成为临时方块
         _copy_block(b_target, tmp_bitmap)
@@ -394,26 +406,29 @@ def move_block(x, y, direction, distance=1):
     :param y: 当前位置y
     :param direction: 移动方向 'to_l'向左 'to_r'向右 'to_d'向下 'to_u'原地旋转
     :param distance: 移动距离
-    :return: None
+    :return: 布尔型
     """
     global KEY
+    respawn_flag = False
     b_l, b_h = BLOCK_BITMAP[-2][-2][0], BLOCK_BITMAP[-2][-2][1]
     if direction == 'to_l' and _edge_detect(x - distance, y, BLOCK_BITMAP) and \
-            _collision_detect(x - distance, y, 'to_l', BLOCK_BITMAP):
+            _collision_detect(x - distance, y, 'to_l'):
         _clear_block(x, y, b_l, b_h)
         print_block(x - distance, y)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x - distance, y
     elif direction == 'to_r' and _edge_detect(x + distance, y, BLOCK_BITMAP) and \
-            _collision_detect(x + distance, y, 'to_r', BLOCK_BITMAP):
+            _collision_detect(x + distance, y, 'to_r'):
         _clear_block(x, y, b_l, b_h)
         print_block(x + distance, y)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x + distance, y
     elif direction == 'to_d' and _edge_detect(x, y + distance, BLOCK_BITMAP) and \
-            _collision_detect(x, y + distance, 'to_d', BLOCK_BITMAP):
+            _collision_detect(x, y + distance, 'to_d'):
         _clear_block(x, y, b_l, b_h)
         print_block(x, y + distance)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x, y + distance
-    # TODO 需要 _edge_detect 检测旋转。。。。。
+    elif direction == 'to_d' and (not _edge_detect(x, y + distance, BLOCK_BITMAP)
+                                  or not _collision_detect(x, y + distance, 'to_d')):
+        respawn_flag = True
     elif direction == 'to_u' and _edge_detect(x, y, _rotate_block(False)) and \
             _collision_detect_r(x, y, _rotate_block(False)):
         _clear_block(x, y, b_l, b_h)
@@ -421,6 +436,7 @@ def move_block(x, y, direction, distance=1):
         print_block(x, y)
     # 恢复向下移动 区别于get_keys获取的's'
     KEY = KEY_DEFAULT
+    return respawn_flag
 
 
 def spawn_newblock(t=None):
@@ -472,7 +488,7 @@ def get_keys():
                     break
             count += 1
     except KeyboardInterrupt:
-        print('get: ctrl-c')
+        print('Get: Ctrl-C to EXIT')
         exit()
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
@@ -499,23 +515,22 @@ def get_direction():
 # 包括方块向下运动碰撞检测 地图中方块的消除 消除后计分等
 
 
-def _collision_detect(x, y, direction, b_bitmap):
+def _collision_detect(x, y, direction):
     """
     方块与方块之间碰撞检测
     :param x: 方块左上角坐标x
     :param y: 方块左上角坐标y
     :param direction: 移动方向 'to_l'向左 'to_r'向右 'to_d'向下
-    :param b_bitmap: 方块位图
     :return: 布尔型
     """
-    b_l, b_h = b_bitmap[-2][-2][0], b_bitmap[-2][-2][1]
+    b_l, b_h = BLOCK_BITMAP[-2][-2][0], BLOCK_BITMAP[-2][-2][1]
     distance = 1000000
     if direction == 'to_l':
         for _y in range(y, y + b_h):
             block_y = _y - y
             map_y = _y - GAME_AREA_Y
             for block_x in range(b_l):  # 0->b_l-1
-                if b_bitmap[block_y][block_x] == 1:
+                if BLOCK_BITMAP[block_y][block_x] == 1:
                     sx = x - GAME_AREA_X + block_x
                     for map_x in range(sx, -1, -1):
                         if GAME_BITMAP[map_y][map_x][0] == 1:
@@ -528,7 +543,7 @@ def _collision_detect(x, y, direction, b_bitmap):
             block_y = _y - y
             map_y = _y - GAME_AREA_Y
             for block_x in range(b_l - 1, -1, -1):
-                if b_bitmap[block_y][block_x] == 1:
+                if BLOCK_BITMAP[block_y][block_x] == 1:
                     sx = x - GAME_AREA_X + block_x
                     for map_x in range(sx, len(GAME_BITMAP[0])):
                         if GAME_BITMAP[map_y][map_x][0] == 1:
@@ -542,8 +557,9 @@ def _collision_detect(x, y, direction, b_bitmap):
             map_x = _x - GAME_AREA_X
             for block_y in range(b_h - 1, -1, -1):
                 # 从左往右从下往上 寻找方块上第一个值为1的点 纵坐标为block_y
-                if b_bitmap[block_y][block_x] == 1:
+                if BLOCK_BITMAP[block_y][block_x] == 1:
                     # 从block_y映射到地图对应的点的下一个点 此点为方块下次将到达的点 纵坐标起点为sy
+                    # 传递y的实参为y + distance 已包含移动方向distance
                     sy = y - GAME_AREA_Y + block_y
                     # 从sy开始竖直向下到地图纵坐标最大值len(GAME_BITMAP) 查找值为1的地图点
                     for map_y in range(sy, len(GAME_BITMAP)):
@@ -563,18 +579,21 @@ def _collision_detect_r(x, y, b_bitmap):
     旋转后碰撞检测
     :param x: 方块左上角坐标x
     :param y: 方块左上角坐标y
-    :param b_bitmap: 方块位图
+    :param b_bitmap: 临时方块位图
     :return: 布尔型
     """
-    # TODO 这个函数有问题。。。。。。。
-    # TODO 可能是因为 _collision_detect(x, y, 'to_l', b_bitmap) 传递的 x或y 函数内当做移动后来处理
-    # 比如传入   x, y + distance
-    if _collision_detect(x, y, 'to_l', b_bitmap) and \
-            _collision_detect(x, y, 'to_r', b_bitmap) and \
-            _collision_detect(x, y, 'to_d', b_bitmap):
-        return True
-    else:
-        return True
+    # 迭代临时方块与对应地图上的点
+    for _x in range(4):
+        for _y in range(4):
+            # 原始方块和旋转后方块有重叠
+            if b_bitmap[_x][_y] == 1 and BLOCK_BITMAP[_x][_y] == 1:
+                # 排除重叠的点
+                b_bitmap[_x][_y] = 0
+            # 旋转后方块与地图是否有重叠点
+            map_x, map_y = y - GAME_AREA_Y + _x, x - GAME_AREA_X + _y
+            if b_bitmap[_x][_y] == 1 and GAME_BITMAP[map_x][map_y][0] == 1:
+                return False
+    return True
 
 
 def print_info():
@@ -589,24 +608,37 @@ def print_info():
     print('方块：{:<{}}'.format(str(BLOCK_TYPE), (str_len - 3) * 2))
     goto_blockxy(x, y + 6)
     print('得分：{:<{}}'.format(str(GAME_SCORE), (str_len - 3) * 2))
+    goto_blockxy(x, y + 9)
+    print('按p暂停/开始')
+
+
+def eliminate_blocks():
+    pass
 
 
 if __name__ == '__main__':
     tetris_init()
-    # ############ 按键p  退出。。。。。。。。。。
-    for i in 'IJLOTZSX':
-        spawn_newblock('I')
+    while True:
+        # 生成新方块
+        spawn_newblock()
         print_block(BLOCK_COORD['x'], BLOCK_COORD['y'])
-        for j in range(40):
+        down_move_count = 0
+        while True:
             get_keys()
+            # 暂停
+            if KEY == 'p':
+                KEY = KEY_DEFAULT
+                while KEY != 'p':
+                    get_keys()
+                    time.sleep(0.1)
+            # 打印信息
             print_info()
-            goto_blockxy(INFO_AREA_X, INFO_AREA_Y)
-            move_block(BLOCK_COORD['x'], BLOCK_COORD['y'], get_direction())
-            _print_map_bits()
-            # time.sleep(0.09)
-            # ############# 直到无法下降 生成新方块
-
-    time.sleep(1)
-    print('\n')
-    print('DONEEEEEEEEEE')
-    restore_cursor()
+            reborn_flag = move_block(BLOCK_COORD['x'], BLOCK_COORD['y'], get_direction())
+            if down_move_count == 0 and reborn_flag:
+                restore_cursor()
+                print('Gam Over!!!')
+                exit()
+            if reborn_flag:
+                break
+            # _print_map_bits()
+            down_move_count += 1

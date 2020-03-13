@@ -21,7 +21,11 @@ print_info          OK
 _copy_block         OK
 _print_map_bits     OK
 _gotoxy_print       OK
-_collision_detect
-_collision_detect_r
-move_block
+_collision_detect   OK
+_collision_detect_r OK
+move_block          OK
+eliminate_blocks
+
+
+
 
