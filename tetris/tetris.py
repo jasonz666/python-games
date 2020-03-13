@@ -613,6 +613,8 @@ def print_info():
 
 
 def eliminate_blocks():
+    # TODO 消除函数 未完成
+    # TODO 计分功能 未完成
     pass
 
 
