@@ -470,9 +470,10 @@ def spawn_newblock(t=None):
 # 包括获取按键 按键转换方向等
 
 
-def get_keys():
+def get_keys(delay=None):
     """
     按键获取函数 p键退出 不支持方向键
+    :param delay: 传递额外延迟
     :return: None
     """
     global KEY
@@ -487,6 +488,8 @@ def get_keys():
     try:
         termios.tcsetattr(fd, termios.TCSADRAIN, new)
         while count < times:
+            if delay is not None:
+                time.sleep(delay)
             time.sleep(KEY_INTERVAL)
             # support non-blocking input
             if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
@@ -645,8 +648,7 @@ if __name__ == '__main__':
                 KEY = KEY_DEFAULT
                 while KEY != ' ':
                     try:
-                        get_keys()
-                        time.sleep(0.2)
+                        get_keys(0.2)
                     except KeyboardInterrupt:
                         exit_clear('Get: Ctrl-C to EXIT', 1)
             # 打印信息
