@@ -707,6 +707,26 @@ def eliminate_blocks(x=len(GAME_BITMAP) - 1):
         eliminate_blocks(x - 1)
 
 
+# 网络对战功能
+# 包括网络数据传输 输赢判断等
+
+
+def data_transmit():
+    pass
+
+
+def winner_judge():
+    pass
+
+
+def player2_print_block():
+    pass
+
+
+def player2_print_info():
+    pass
+
+
 if __name__ == '__main__':
     tetris_init()
     tmp_score = GAME_SCORE

@@ -33,5 +33,10 @@ copy_block          OK
 
 
 # TODO 网络功能
+data_transmit
+winner_judge
+player2_print_block
+player2_print_info
+
 
 
