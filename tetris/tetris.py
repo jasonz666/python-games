@@ -80,7 +80,7 @@ BLOCK_DICT = {
           [0, 0, [3, 2], 0],
           [0, 0, 0, '\033[41;31m']]
 }
-# 方块临时存储位图
+# 方块存储位图
 BLOCK_BITMAP = [[0, 0, [0, 0], 0] if i == 2 else [0, 0, 0, 0] for i in range(4)]
 # 定义方块出生点的方块左上角的地图坐标
 BLOCK_SX, BLOCK_SY = GAME_AREA_X + GAME_AREA_L // 2 - 2, GAME_AREA_Y
@@ -288,41 +288,51 @@ def tetris_init():
 # 包括选取方块 打印方块 方块旋转 方块平移等函数
 
 
-def _pick_block(b_type):
+def _pick_block(b_bitmap, b_type):
     """
     选取特定类型的方块
+    :param b_bitmap: 方块位图
     :param b_type: 方块类型
     :return: None
     """
     for x in range(4):
         for y in range(4):
-            BLOCK_BITMAP[x][y] = BLOCK_DICT[b_type][x][y]
+            b_bitmap[x][y] = BLOCK_DICT[b_type][x][y]
 
 
-def print_block(x, y):
+def print_block(x, y, b_bitmap, fill_flag=True):
     """
     打印一种方块
     :param x: 起始点x
     :param y: 起始点y
+    :param b_bitmap: 方块位图
+    :param fill_flag: 填充地图位图标记 False为单纯打印方块不填充
     :return: None
     """
-    b_l, b_h = BLOCK_BITMAP[-2][-2][0], BLOCK_BITMAP[-2][-2][1]
-    b_color = BLOCK_BITMAP[-1][-1]
+    if not fill_flag:
+        # 清除上个方块
+        for _x in range(len(b_bitmap)):
+            for _y in range(len(b_bitmap[0])):
+                goto_blockxy(_y + x, _x + y)
+                print('{}'.format(GAME_SQUARE))
+    b_l, b_h = b_bitmap[-2][-2][0], b_bitmap[-2][-2][1]
+    b_color = b_bitmap[-1][-1]
     # 这里的_x,_y为索引表示法 参数x,y为坐标表示法
     for _y in range(b_l):
         for _x in range(b_h):
             # 必须判断是否等于1 不要用True/False判断
             # b_bitmap坐标互换 让位图中所有1呈现的图像与实际打印的图像一致
             # 即b_bitmap中纵向扫描 print也纵向打印
-            if BLOCK_BITMAP[_x][_y] == 1:
+            if b_bitmap[_x][_y] == 1:
                 # 方块位图坐标转换游戏区域坐标 索引到坐标表示法需互换坐标
                 goto_blockxy(_y + x, _x + y)
-                _fill_map_point(_y + x, _x + y, b_color)
+                if fill_flag:
+                    _fill_map_point(_y + x, _x + y, b_color)
                 # 打印行数超过终端窗口高度 可能会提前折行导致方块错乱
                 print('{}{}\033[0m'.format(b_color, GAME_SQUARE))
 
 
-def _copy_block(rotated_block, origin_block):
+def _copy_rotatedblock(rotated_block, origin_block):
     """
     方块拷贝函数
     :param rotated_block: 旋转后的方块位图
@@ -346,6 +356,18 @@ def _copy_block(rotated_block, origin_block):
                 origin_block[_x][_y] = 0
 
 
+def copy_block(fr_bitmap: list, to_bitmap: list):
+    """
+    拷贝方块存储位图
+    :param fr_bitmap: 原始方块
+    :param to_bitmap: 目的方块
+    :return:
+    """
+    for i in range(4):
+        for j in range(4):
+            to_bitmap[i][j] = fr_bitmap[i][j]
+
+
 def _rotate_block(flag=True):
     """
     逆时针旋转方块 即求NxM到MxN的转置矩阵
@@ -362,13 +384,13 @@ def _rotate_block(flag=True):
             b_target[_y][_x] = BLOCK_BITMAP[_x][-_y - 1 - offset]
     # flag为真 生成旋转后方块
     if flag:
-        _copy_block(b_target, BLOCK_BITMAP)
+        _copy_rotatedblock(b_target, BLOCK_BITMAP)
     # 生成临时旋转后方块用于检测
     else:
         # 拷贝未旋转的方块为模板
         tmp_bitmap = copy.deepcopy(BLOCK_BITMAP)
         # 生成为临时方块
-        _copy_block(b_target, tmp_bitmap)
+        _copy_rotatedblock(b_target, tmp_bitmap)
         return tmp_bitmap
 
 
@@ -423,17 +445,17 @@ def move_block(x, y, direction, distance=1):
     if direction == 'to_l' and _edge_detect(x - distance, y, BLOCK_BITMAP) and \
             _collision_detect(x - distance, y, 'to_l'):
         _clear_block(x, y, b_l, b_h)
-        print_block(x - distance, y)
+        print_block(x - distance, y, BLOCK_BITMAP)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x - distance, y
     elif direction == 'to_r' and _edge_detect(x + distance, y, BLOCK_BITMAP) and \
             _collision_detect(x + distance, y, 'to_r'):
         _clear_block(x, y, b_l, b_h)
-        print_block(x + distance, y)
+        print_block(x + distance, y, BLOCK_BITMAP)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x + distance, y
     elif direction == 'to_d' and _edge_detect(x, y + distance, BLOCK_BITMAP) and \
             _collision_detect(x, y + distance, 'to_d'):
         _clear_block(x, y, b_l, b_h)
-        print_block(x, y + distance)
+        print_block(x, y + distance, BLOCK_BITMAP)
         BLOCK_COORD['x'], BLOCK_COORD['y'] = x, y + distance
     elif direction == 'to_d' and (not _edge_detect(x, y + distance, BLOCK_BITMAP)
                                   or not _collision_detect(x, y + distance, 'to_d')):
@@ -442,13 +464,13 @@ def move_block(x, y, direction, distance=1):
             _collision_detect_r(x, y, _rotate_block(False)):
         _clear_block(x, y, b_l, b_h)
         _rotate_block()
-        print_block(x, y)
+        print_block(x, y, BLOCK_BITMAP)
     # 恢复向下移动 区别于get_keys获取的's'
     KEY = KEY_DEFAULT
     return respawn_flag
 
 
-def spawn_newblock(t=None):
+def spawn_newblock(b_bitmap, t=None):
     """新方块生成
     """
     global BLOCK_COUNT, BLOCK_TYPE
@@ -458,7 +480,7 @@ def spawn_newblock(t=None):
         BLOCK_TYPE = random.choice(b_type)
     else:
         BLOCK_TYPE = t
-    _pick_block(BLOCK_TYPE)
+    _pick_block(b_bitmap, BLOCK_TYPE)
     # 新方块出生点初始化
     BLOCK_COORD['x'], BLOCK_COORD['y'] = BLOCK_SX, BLOCK_SY
     BLOCK_COUNT += 1
@@ -624,6 +646,8 @@ def print_info():
     print('按 {}'.format('空格' if KEY_PAUSE == ' ' else KEY_PAUSE))
     goto_blockxy(x, y + 10)
     print('暂停/开始')
+    goto_blockxy(x, y + 12)
+    print('下个方块：')
 
 
 def _is_eliminable(x):
@@ -686,10 +710,14 @@ def eliminate_blocks(x=len(GAME_BITMAP) - 1):
 if __name__ == '__main__':
     tetris_init()
     tmp_score = GAME_SCORE
+    block_nextbm = copy.deepcopy(BLOCK_BITMAP)
+    spawn_newblock(block_nextbm)
     while True:
         # 生成新方块
-        spawn_newblock()
-        print_block(BLOCK_COORD['x'], BLOCK_COORD['y'])
+        copy_block(block_nextbm, BLOCK_BITMAP)
+        spawn_newblock(block_nextbm)
+        print_block(INFO_AREA_X, INFO_AREA_Y + 14, block_nextbm, fill_flag=False)
+        print_block(BLOCK_COORD['x'], BLOCK_COORD['y'], BLOCK_BITMAP)
         down_move_count = 0
         while True:
             get_keys()
