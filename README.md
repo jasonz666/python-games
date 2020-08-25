@@ -1,7 +1,5 @@
 # python-games
-funny games implemented by python.
+Python 实现的有趣小游戏。  
+Funny games implemented by python.  
 
-待补全  
-tetris  
-
-test
+1. tetris: 终端版俄罗斯方块。
