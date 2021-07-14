@@ -38,5 +38,3 @@ winner_judge
 player2_print_block
 player2_print_info
 
-
-
